@@ -67,6 +67,65 @@ class App extends Component {
     }
   }
 
+  async borrow(amount) {
+    if (this.state.dbank !== 'undefined') {
+      try {
+        await this.state.dbank.methods
+          .borrow()
+          .send({ value: amount.toString(), from: this.state.account });
+      } catch (e) {
+        console.log('Error, borrow: ', e);
+      }
+    }
+  }
+
+  async payOff(e) {
+    e.preventDefault();
+    if (this.state.dbank !== 'undefined') {
+      try {
+        const collateralEther = await this.state.dbank.methods
+          .etherCollateral(this.state.account)
+          .call({ from: this.state.account });
+        const tokenBorrowed = collateralEther / 2;
+        await this.state.token.methods
+          .approve(this.state.dBankAddress, tokenBorrowed.toString())
+          .send({ from: this.state.account });
+        await this.state.dbank.methods
+          .payOff()
+          .send({ from: this.state.account });
+      } catch (e) {
+        console.log('Error, pay off: ', e);
+      }
+    }
+  }
+
+  async checkDBC() {
+    if (this.state.dbank !== 'undefined') {
+      try {
+        let DBC = await this.state.token.methods
+          .balanceOf(this.state.account)
+          .call();
+        DBC = await this.state.web3.utils.fromWei(DBC);
+        this.setState({ DBC });
+      } catch (e) {
+        console.log('Error, get interest: ', e);
+      }
+    }
+  }
+
+  async getBalanceInDBank() {
+    if (this.state.dbank !== 'undefined') {
+      try {
+        let balanceInDBank = await this.state.dbank.methods
+          .getEthereumBalanceOf()
+          .call({ from: this.state.account });
+        balanceInDBank = await this.state.web3.utils.fromWei(balanceInDBank);
+        this.setState({ balanceInDBank });
+      } catch (e) {
+        console.log('Error, get deposited amount: ', e);
+      }
+    }
+  }
   constructor(props) {
     super(props);
     this.state = {
@@ -75,6 +134,9 @@ class App extends Component {
       token: null,
       dbank: null,
       balance: 0,
+      balanceInDBank: null,
+      interest: null,
+      DBC: null,
       dBankAddress: null,
     };
   }
@@ -148,6 +210,90 @@ class App extends Component {
                         WITHDRAW
                       </button>
                     </div>
+                  </Tab>
+                  <Tab eventKey="borrow" title="Borrow">
+                    <div>
+                      <br></br>
+                      Do you want to borrow tokens?
+                      <br></br>
+                      (You'll get 50% of collateral, in Tokens)
+                      <br></br>
+                      Type collateral amount (in ETH)
+                      <br></br>
+                      <br></br>
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          let amount = this.borrowAmount.value;
+                          amount = amount * 10 ** 18;
+                          this.borrow(amount);
+                        }}
+                      >
+                        <div className="form-group mr-sm-2">
+                          <input
+                            id="borrowAmount"
+                            step="0.01"
+                            type="number"
+                            ref={(input) => {
+                              this.borrowAmount = input;
+                            }}
+                            className="form-control form-control-md"
+                            placeholder="amount..."
+                            required
+                          />
+                        </div>
+                        <button type="submit" className="btn btn-primary">
+                          BORROW
+                        </button>
+                      </form>
+                    </div>
+                  </Tab>
+                  <Tab eventKey="payOff" title="Payoff">
+                    <div>
+                      <br></br>
+                      Do you want to payoff the loan?
+                      <br></br>
+                      (You'll receive your collateral - fee)
+                      <br></br>
+                      <br></br>
+                      <button
+                        type="submit"
+                        className="btn btn-primary"
+                        onClick={(e) => this.payOff(e)}
+                      >
+                        PAYOFF
+                      </button>
+                    </div>
+                  </Tab>
+                  <Tab eventKey="checkInterest" title="Check DBC">
+                    <br />
+                    Current DBC
+                    <br />
+                    <div>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => this.checkDBC()}
+                      >
+                        GET
+                      </button>
+                    </div>
+                    {this.state.DBC ? this.state.DBC + ' DBC' : ''}
+                  </Tab>
+                  <Tab eventKey="balanceInDBank" title="Check Balance In dBank">
+                    <br />
+                    Current Balance in dBank
+                    <br />
+                    <div>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => this.getBalanceInDBank()}
+                      >
+                        GET
+                      </button>
+                    </div>
+                    {this.state.balanceInDBank
+                      ? this.state.balanceInDBank + ' ETH'
+                      : ''}
                   </Tab>
                 </Tabs>
               </div>

@@ -10,9 +10,13 @@ contract dBank {
   mapping(address => uint) public etherBalanceOf;
   mapping(address => uint) public depositStart;
   mapping(address => bool) public isDeposited;
+  mapping(address => bool) public isBorrowed;
+  mapping(address => uint) public etherCollateral;
 
   event Deposit(address indexed user, uint etherAmount, uint timeStart);
   event Withdraw(address indexed user, uint etherAmount, uint depositTime, uint interest);
+  event Borrow(address indexed user, uint collateralEtherAmount, uint borrowedTokenAmount);
+  event PayOff(address indexed user, uint fee);
 
   constructor(Token _token) public {
     token = _token;
@@ -27,6 +31,24 @@ contract dBank {
     isDeposited[msg.sender] = true;
 
     emit Deposit(msg.sender, msg.value, block.timestamp);
+  }
+
+  function getEthereumBalanceOf() public view returns(uint) {
+    uint etherBalance =  etherBalanceOf[msg.sender];
+
+    return etherBalance;
+  }
+
+  function getInterest() public view returns(uint) {
+    require(isDeposited[msg.sender] == true, "Error, no previous deposit");
+
+    uint userBalance = etherBalanceOf[msg.sender];
+    uint depositTime = block.timestamp - depositStart[msg.sender];
+
+    uint interestPerSecond = 31668017 * (userBalance / 1e16);
+    uint interest = interestPerSecond * depositTime;
+
+    return interest;
   }
 
   function withdraw() public {
@@ -49,30 +71,28 @@ contract dBank {
   }
 
   function borrow() payable public {
-    //check if collateral is >= than 0.01 ETH
-    //check if user doesn't have active loan
+    require(msg.value >= 1e16, "Error, deposit must be >= 0.1 ETH");
+    require(isBorrowed[msg.sender] == false, "Error, user has an active loan!");
 
-    //add msg.value to ether collateral
+    etherCollateral[msg.sender] = etherCollateral[msg.sender] + msg.value;
+    uint tokenAmountToMint = msg.value / 2;
+    token.mint(msg.sender, tokenAmountToMint);
 
-    //calc tokens amount to mint, 50% of msg.value
+    isBorrowed[msg.sender] = true;
 
-    //mint&send tokens to user
-
-    //activate borrower's loan status
-
-    //emit event
+    emit Borrow(msg.sender, etherCollateral[msg.sender], tokenAmountToMint);
   }
 
   function payOff() public {
-    //check if loan is active
-    //transfer tokens from user back to the contract
+    require(isBorrowed[msg.sender] == true, "Error, user does not have an active loan!");
+    require(token.transferFrom(msg.sender, address(this), etherCollateral[msg.sender] / 2), "Error, can't receive tokens.");
 
-    //calc fee
+    uint fee = etherCollateral[msg.sender] / 10;
+    msg.sender.transfer(etherCollateral[msg.sender] - fee);
 
-    //send user's collateral minus fee
+    etherCollateral[msg.sender] = 0;
+    isBorrowed[msg.sender] = false;
 
-    //reset borrower's data
-
-    //emit event
+    emit PayOff(msg.sender, fee);
   }
 }
